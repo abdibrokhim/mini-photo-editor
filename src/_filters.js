@@ -1,5 +1,8 @@
-import { html} from 'mini'
+import { html, reactive } from '@xdadda/mini'
 import icon_shutter_rotate from './assets/icon_shutter_rotate.svg?raw'
+
+import section from './__section.js'
+
 
   const filtersLUT = [
     {type:'1',label:'aden', map1: async()=> import('./assets/LUT/LUT_aden.png')},
@@ -13,7 +16,7 @@ import icon_shutter_rotate from './assets/icon_shutter_rotate.svg?raw'
     {type:'1',label:'reyes', map1: async()=> import('./assets/LUT/LUT_reyes.png')},
     {type:'MTX',label:'polaroid', mtx: 'polaroid'},
     {type:'MTX',label:'kodak', mtx: 'kodachrome'},
-    {type:'MTX',label:'greeni', mtx: 'greeni'},
+    {type:'MTX',label:'browni', mtx: 'browni'},
     {type:'MTX',label:'vintage', mtx: 'vintage'},
   ]
 
@@ -24,92 +27,79 @@ import icon_shutter_rotate from './assets/icon_shutter_rotate.svg?raw'
     return img
   }
 
-export default function filters($selection, handleSelection,  params,onUpdate){
+export default function filters($selection, _params, onUpdate){
+  const params=_params.filters
 
-  async function setFilter(id){
-      id=id.replace('flt_','')
-      const t = setTimeout(()=>loader.style.display='',20) //show loader only if it's taking more than 20ms
-      const _f=filtersLUT[parseInt(id)]
+  let selected=reactive(false)
+
+  reactive(async()=>{
+    if($selection.value===null) {
+      //load from recipe
+      if(_params.filters?.label) {
+        const idx = filtersLUT.findIndex(e=>e.label===_params.filters.label)
+        selectFilter(idx)
+      }
+    }
+  },{effect:true})
+
+
+  async function setFilter(idx){
+      const loader = document.getElementById('loader')
+      let t 
+      if(loader) setTimeout(()=>loader.style.display='',20) //show loader only if it's taking more than 20ms
+      const _f=filtersLUT[parseInt(idx)]
       if(_f.map1 && typeof _f.map1==='function') _f.map1=await loadFilterLUT((await _f.map1()).default)
       if(_f.map2 && typeof _f.map2==='function') _f.map2=await loadFilterLUT((await _f.map2()).default)
       //await new Promise(r => setTimeout(r,1000))
       const {type,mtx,map1,map2,label} = _f
       params.opt={type,mtx,map1,map2,label}
-      clearTimeout(t)
-      loader.style.display='none'
-
+      if(t) clearTimeout(t)
+      if(loader) loader.style.display='none'
   }
 
-  let selection=false
-  async function selectFilter(){
-    const el = document.getElementById(this.id)
-    //preview=false
-    if(!selection || selection!==this.id){
+  async function selectFilter(idx){
+    if(selected.value!==idx){
       //select
-      instafilters.querySelector('[selected]')?.removeAttribute('selected');
-      el.setAttribute('selected',true)
+      selected.value=idx
       btn_reset_filters?.removeAttribute('disabled')
-      selection=this.id
-      await setFilter(this.id)
+      await setFilter(idx)
       onUpdate()
     } 
     else {
       //deselect
-      el.removeAttribute('selected')
-      btn_reset_filters?.setAttribute('disabled',true)
-      selection=false
-      //previewFilter.call(this)
-      params.opt=0
+      resetFilters()
     }
   }
-
-  /*
-  let preview=false
-  async function previewFilter(){
-    if(selection) return
-    if(!preview){
-      preview=true
-      await setFilter(this.id)
-    } else {
-      preview=false
-      params.opt=0
-    }
-    onUpdate()
-  }
-  */
 
   function resetFilters(){
-    const instafilters=document.getElementById('instafilters')
     btn_reset_filters?.setAttribute('disabled',true)
-    instafilters?.querySelector('[selected]')?.removeAttribute('selected');
+    selected.value=false
     params.opt=0
-    selection=false
-    //preview=false
     onUpdate()
   }
 
   return html`
-    <style>.btn_insta{width:70px;color: light-dark(white, white);}</style>
-    <div class="section" id="filters" :style="${()=>$selection.value==='filters'&&'height:235px;'}">
-        <div style="display:flex;justify-content: space-between;cursor:pointer; color" @click="${()=>handleSelection('filters')}">
-          <b>filters</b>
-            <style type="text/css">@keyframes animate { 0.00% {animation-timing-function: cubic-bezier(0.51,0.03,0.89,0.56);transform: translate(0.00px,0.00px) rotate(0.00deg) scale(1.00, 1.00) skew(0deg, 0.00deg) ;opacity: 1.00;}52.00% {animation-timing-function: cubic-bezier(0.17,0.39,0.55,0.91);transform: translate(0.00px,0.00px) rotate(211.13deg) ;}100.00% {animation-timing-function: cubic-bezier(0.17,0.39,0.55,0.91);transform: translate(0.00px,0.00px) rotate(360.00deg) ;} }</style>
-            <div id="loader" style="width:23px;fill: grey;display:none;">${icon_shutter_rotate}</div>
+    <style>.btn_insta{width:70px;color: light-dark(white, white); font-size: 12px;}</style>
+    <style type="text/css">@keyframes animate { 0.00% {animation-timing-function: cubic-bezier(0.51,0.03,0.89,0.56);transform: translate(0.00px,0.00px) rotate(0.00deg) scale(1.00, 1.00) skew(0deg, 0.00deg) ;opacity: 1.00;}52.00% {animation-timing-function: cubic-bezier(0.17,0.39,0.55,0.91);transform: translate(0.00px,0.00px) rotate(211.13deg) ;}100.00% {animation-timing-function: cubic-bezier(0.17,0.39,0.55,0.91);transform: translate(0.00px,0.00px) rotate(360.00deg) ;} }</style>
 
-          <a id="btn_reset_filters" class="reset_btn" @click="${()=>resetFilters()}" disabled title="reset">\u00D8</a>
-        </div>
-        ${()=>$selection.value==='filters' && html`
-          <div id="instafilters" style="font-size: 12px;">
-              <hr>
+    ${section(
+      'filters',    //section name
+      235,          //section height
+      $selection,
+      _params, 
+      onUpdate,
+      resetFilters, 
+      ()=>html`<div id="loader" style="width:23px;fill: orange;display:none;position:absolute;top:-30px;">${icon_shutter_rotate}</div>
               ${filtersLUT.map((f,idx)=>html`
-                <button class="btn_insta" id="flt_${idx}" @click="${selectFilter}" selected="${params.opt?.label===f.label}">${f.label}</button>
-                `)}
-          </div>
-
-        `}
-    </div>
+                <button class="btn_insta" @click="${()=>selectFilter(idx)}" :selected="${()=>selected.value===idx}">${f.label}</button>
+                `)}            
+      `)}
   `
+
 }
 
-//                <button class="btn_insta" id="flt_${idx}" @click="${selectFilter}" @mouseenter="${previewFilter}" @mouseleave="${previewFilter}" selected="${params.opt?.label===f.label}">${f.label}</button>
+
+
+
+
 

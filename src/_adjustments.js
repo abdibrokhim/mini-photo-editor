@@ -1,62 +1,9 @@
-import { html} from 'mini'
+import { html, reactive } from '@xdadda/mini'
+import section from './__section.js'
+import {debounce} from './js/tools.js'
 
 
-
-export default function adjustments($selection, handleSelection,  adj, onUpdate){
-
-  ///// ADJUSTMENTS
-    function setAdj(e){ //id= "section:adj"
-      const value = e.target.value
-      const id = this.id.split('_')
-      adj[id[0]][id[1]]=parseFloat(value)
-      this.nextElementSibling.textContent=value
-
-      onUpdate()
-      //debounce(pushHistory,500)
-      updateResetBtn(id[0])
-    }
-
-    function setAdjCtrl(_id){
-      const el = document.getElementById(_id)
-      if(!el) return
-      const id = _id.split('_')
-      el.value=adj[id[0]][id[1]]
-      el.nextElementSibling.textContent=el.value
-    }
-
-    function resetAdjCtrl(){
-      if(!this) return
-      const id = this.id.split('_')
-      adj[id[0]][id[1]]=0
-      setAdjCtrl(this.id)
-      onUpdate()
-      //debounce(pushHistory,500)
-      updateResetBtn(id[0])
-    }
-
-    function resetSection(section){
-      if(adj[section]) {
-        Object.keys(adj[section]).forEach(e=>{
-          adj[section][e]=0
-          setAdjCtrl(section+'_'+e)
-        })
-        onUpdate()
-      }
-      updateResetBtn(section)
-    }
-
-    function updateResetBtn(section){
-      //if all section's adjustments are set to 0 disable reset
-      const el=document.getElementById('btn_reset_'+section)
-      if(Object.values(adj[section]).reduce((p,v)=>p+=v,0)===0){
-        if(el) el.setAttribute('disabled',true)
-      }
-      else {
-        if(el) el.removeAttribute('disabled')
-      }
-
-    }
-  /////////////////
+export default function adjustments($selection, params, onUpdate){
 
   const heights={
     lights:190,
@@ -64,28 +11,107 @@ export default function adjustments($selection, handleSelection,  adj, onUpdate)
     effects:105
   }
 
+  reactive(()=>{
+    if($selection.value===null) {
+      //app has been reset, new values loaded
+      ['lights','colors','effects'].forEach(s=>updateResetBtn(s))
+    }
+  },{effect:true})
+  
+  /////////////////////////////
+
+  ///// SECTION HANDLING FN ////////
+    function checkParamszero(section) {
+      return Object.values(params[section]).reduce((p,v)=>p+=v,0)===0
+    }
+    function resetParamsToZero(section) {
+      for (const key of Object.keys(params[section])) {
+        params[section][key]=0
+        updateParamCtrl(section+'_'+key)            
+      }
+    }
+
+    function resetSection(section){
+      resetParamsToZero(section)
+      onUpdate()
+      updateResetBtn(section)
+    }
+
+    function updateResetBtn(section){
+      const el=document.getElementById('btn_reset_'+section)
+      if(!el) return
+      //if all section's params are set to default values disable reset
+      if(checkParamszero(section)) el.setAttribute('disabled',true)
+      else el.removeAttribute('disabled')
+    }
+  /////////////////////////////
+
+
+  ///// RANGE INPUT FN ////////
+    function _setParam(e){
+      debounce('param',()=>setParam.call(this,e),30)
+    }
+    function setParam(e){ //id= "section_field"
+      const value = e.target.value
+      const id = this.id.split('_')
+      params[id[0]][id[1]]=parseFloat(value)
+      updateParamCtrl(this.id)
+      onUpdate()
+      updateResetBtn(id[0])
+    }
+
+    function updateParamCtrl(_id){
+      const el = document.getElementById(_id)
+      if(!el) return
+      const id = _id.split('_')
+      el.value=params[id[0]][id[1]]
+      if(id.length===3){//it's the number input
+        el.previousElementSibling.value=el.value
+      }
+      else {//it's the range input
+        el.nextElementSibling.value=el.value
+      }
+    }
+
+    function resetParamCtrl(){
+      if(!this) return
+      const id = this.id.split('_')
+      params[id[0]][id[1]]=0
+      updateParamCtrl(this.id)
+      onUpdate()
+      updateResetBtn(id[0])
+    }
+  /////////////////////////////
+
+
   return html`
-    ${['lights','colors','effects'].map(s=>html`
-      <div class="section" id="${s}" :style="${()=>$selection.value===s&&`height:${heights[s]}px;`}">
-        <div style="display:flex;justify-content: space-between;cursor:pointer;" @click="${()=>handleSelection(s)}">
-          <b>${s}</b><a id="btn_reset_${s}" class="reset_btn" @click="${()=>resetSection(s)}" disabled title="reset">\u00D8</a>
-        </div>
+    ${['lights','colors','effects'].map(secname=>html`
 
-        ${()=>$selection.value===s && html`
-          <div>
-            <hr>
-            ${Object.keys(adj[s]).map(e=>html`
+        ${section(
+            secname,          //section's name
+            heights[secname], // section's height once open
+            $selection,       //signal with active sectioname, that opens/closes section
+            params,           //section's params obj of which $skip field will be set on/off
+            onUpdate,         //called when section is enabled/disabled
+            resetSection,     //section name provided to onReset
+            ()=>html`${Object.keys(params[secname]).filter(e=>!e.startsWith('$')).map(e=>html`
+                          /* RANGE INPUTS */
+                          <div style="display:flex;justify-content: space-around;align-items: center;">
+                            <div class="rangelabel">${e}</div>
+                            <input id="${secname+'_'+e}"      type="range"  style="width:130px;"  value="${params[secname][e]}" min=-1 max=1 step=0.01 @input="${_setParam}" @dblclick="${resetParamCtrl}">
+                            <input id="${secname+'_'+e+'_'}"  type="number" class="rangenumb"     value="${params[secname][e]}" min=-1 max=1 step=0.01 @input="${_setParam}">
+                          </div>
 
-                <div style="display:flex;justify-content: space-around;align-items: center;">
-                  <label style="width:100px;text-align:left;color:gray;">${e}</label>
-                  <input id="${s+'_'+e}" style="width:130px;" type="range" value="${adj[s][e]}" min=-1 max=1 step=0.01 @input="${setAdj}" @dblclick="${resetAdjCtrl}"/>
-                  <span style="width:40px;text-align:right;color:gray;">${adj[s][e]}</span>
-                </div>
-
+                      `)}
             `)}
-          </div>
-        `}
-      </div>
+
+
+
     `)}
   `
 }
+
+
+
+
+

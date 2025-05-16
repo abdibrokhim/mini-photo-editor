@@ -1,14 +1,14 @@
-import { alert } from 'mini/components'
-
+import { alert } from '@xdadda/mini/components'
 //////// DEBOUNCE //////////////////////
-  const timerids = new Map();
-  export function debounce(cb,delay=100){
-    if(timerids.has(cb)) {
-      clearTimeout(timerids.get(cb))
-      timerids.delete(cb)
+  export const timerids = new Map();
+  export function debounce(id,cb,delay=100){
+    if(timerids.has(id)) {
+      //console.log('debouncing,...',id)
     }
-    const timerid = setTimeout(()=>cb(),delay)
-    timerids.set(cb,timerid)
+    else {
+      const t = setTimeout(()=>{cb();timerids.delete(id);},delay)
+      timerids.set(id,t)      
+    }
   }
 ////////////////////////////////////////
 
@@ -26,7 +26,7 @@ import { alert } from 'mini/components'
       input.remove();
       if(ev.type==='cancel') return
       const file = ev.target.files[0];
-      if(!file) return await alert('File not recognized!')
+      if(!file) return await alert('Unsupported file format!')
       //if(file.size>60*1024*1024) return await alert('Upload files smaller than 60MB!')
       return file
     } catch(error){
@@ -37,26 +37,31 @@ import { alert } from 'mini/components'
 
   export function downloadFile(blob, name){
     if(!blob || !name) return console.error('download missing inputs')
-    var el = document.createElement('a')
-    el.href = URL.createObjectURL(blob)
-    el.download = name
-    el.click()
+    try {
+      var el = document.createElement('a')
+      el.href = URL.createObjectURL(blob)
+      el.download = name
+      el.click()
+    } catch(error){
+      console.error(error)
+    }
   }
 
   export async function readImage(file, onLoaded=null){
     try {
-      //const file = await openFile('image/*')
       if(!file) return
       const reader= new FileReader()
       await new Promise(r=> reader.onload=r, reader.readAsArrayBuffer(file))
       const {name,size,type,lastModified} = file;
       const blob = new Blob([reader.result],{type})
       const img = new Image();
-      await new Promise((r,j) => {img.onload=r; img.onerror=j; img.src=URL.createObjectURL(blob); })
-      
+      img.src=URL.createObjectURL(blob);
+      await img.decode();
+  
       if(onLoaded) onLoaded(reader.result, {name,size,type,lastModified}, img)
 
     } catch(error){
+      console.error(error)
       await alert('Unknown format')
     }
   }
@@ -70,3 +75,24 @@ import { alert } from 'mini/components'
   }
 
 ////////////////////////////////////////
+
+
+  //NOTE: it will not work in IOS Safari if not behind https!! so no localhost but don't worry
+  export const shareBlob = async (filename, blob) => {
+    console.log(filename)
+    const data = {
+      files: [
+        new File([blob], filename, {
+          type: blob.type,
+        }),
+      ],
+    };
+    try {
+      if (!navigator.canShare || !(navigator.canShare(data))) {
+        throw new Error("Can't share data.");
+      }
+      await navigator.share(data);
+    } catch (err) {
+      if(err.message !== 'Share canceled') console.error(err.name,'>', err.message);
+    }
+  }

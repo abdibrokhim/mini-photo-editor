@@ -1,50 +1,49 @@
-import { html } from 'mini'
-import { alert } from 'mini/components'
+import { html } from '@xdadda/mini'
+import { alert } from '@xdadda/mini/components'
 
 import { openFile } from '../js/tools.js'
 
 
 //filetype es 'image/*'
-export default function clickdropFile(txt, filetype, onFileOpened){
+export default function clickdropFile(txt, filetype, onFileOpened, cstyle){
 
 
   ///// FILE CLICK
     async function handleClick(){
-      const file = await openFile(filetype)
-      if(!file) return
-      onFileOpened(file)
+      try {
+        const file = await openFile(filetype)
+        if(!file) return
+        onFileOpened(file)        
+      }
+      catch(e){console.error(e)}
     }
 
 
   ///// FILE DRAG&DROP
     function dropHandler(ev) {
       ev.preventDefault();
-      const btn = ev.target
+      const btn = ev.target;
       btn.style.borderColor='';
+      let file;
       if (ev.dataTransfer.items) {
         const item = ev.dataTransfer.items[0];
         if(!item.type.match("^"+filetype.split(',').map(e=>'^'+e).join('|'))) 
-          return alert('unknown format')
-
-        const file = item.getAsFile();
-        //console.log('file',file);
-        onFileOpened(file)
+          return alert('unknown format');
+        file = item.getAsFile();
       } else {
-        const file = ev.dataTransfer.files[0]
-        //console.log('file',file);
-        onFileOpened(file)
+        file = ev.dataTransfer.files[0];
       }
+      onFileOpened(file);
     }
     function dragOverHandler(ev) {
-      //console.log("File(s) in drop zone",ev);
       ev.preventDefault();
-      const btn = ev.target
-      if(!btn.style.borderColor) btn.style.borderColor='darkorange'
+      const btn = ev.target;
+      if(!btn.style.borderColor) btn.style.borderColor='darkorange';
     }
     function dragLeaveHandler(ev) {
       ev.preventDefault();
-      const btn = ev.target
-      if(btn.style.borderColor) btn.style.borderColor=''
+      const btn = ev.target;
+      if(btn.style.borderColor) btn.style.borderColor='';
     }
   /////////////////
 
@@ -55,6 +54,7 @@ export default function clickdropFile(txt, filetype, onFileOpened){
             @drop="${dropHandler}"
             @dragover="${dragOverHandler}"
             @dragleave="${dragLeaveHandler}"
+            style="${cstyle||''}"
         >
           ${txt}
         </button>

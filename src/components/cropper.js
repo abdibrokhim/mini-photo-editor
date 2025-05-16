@@ -1,21 +1,19 @@
-import { html, reactive, onMount, onUnmount} from 'mini'
+import { html, reactive, onMount, onUnmount} from '@xdadda/mini'
 import './cropper.css'
 
-export default function Cropper(canvas, adj) {
+export default function Cropper(canvas, adj, onUpdate) {
     const params = adj.crop
     const trs = adj.trs
+    const showtopbottom=reactive(true)
+
 
     onMount(()=>{
       resetCropRect(params.currentcrop)    
       crop.addEventListener("pointerdown", dragstart);
-      crop.addEventListener("pointermove", drag);
-      crop.addEventListener("pointerup", dragstop);
     })
 
     onUnmount(()=>{
       crop.removeEventListener("pointerdown", dragstart);
-      crop.removeEventListener("pointermove", drag);
-      crop.removeEventListener("pointerup", dragstop);    
     })
 
 
@@ -23,15 +21,16 @@ export default function Cropper(canvas, adj) {
     let crop_mouse_pos
     let _left,_right,_top,_bottom
     let box, rect
-    const hotspot=20, minsize=100
+    const hotspot=50, minsize=100
 
     function dragstop(e){
       dragging=false
       crop.releasePointerCapture(e.pointerId)
+      crop.removeEventListener("pointermove", drag);
+      crop.removeEventListener("pointerup", dragstop);    
       updateRect()
       params.currentcrop=rect
-      //this is a UI hack, need to change a button outside of this component ... sorry
-      toggleResetComposition()
+      if(onUpdate) onUpdate(rect)
     }
 
     function updateRect(){
@@ -45,9 +44,17 @@ export default function Cropper(canvas, adj) {
     function dragstart(e){
       dragging=true
       crop.setPointerCapture(e.pointerId)
+      crop.addEventListener("pointermove", drag);
+      crop.addEventListener("pointerup", dragstop);
 
-      if(params.ar) croprect.style.aspectRatio=params.ar
-      else croprect.style.aspectRatio=''
+      if(params.ar) {
+        croprect.style.aspectRatio=params.ar
+        showtopbottom.value=false
+      }
+      else {
+        croprect.style.aspectRatio=''
+        showtopbottom.value=true
+      }
 
       crop_mouse_pos = {x:e.x, y:e.y}
       box=crop.getBoundingClientRect()
@@ -55,10 +62,10 @@ export default function Cropper(canvas, adj) {
 
       //CHECK POINTER pos vs hot spots
       const checkHotspot=(v)=>v>=0 && v<=hotspot
-      _left = checkHotspot(crop_mouse_pos.x-rect.left) //distance from left border
-      _right = checkHotspot(rect.right-crop_mouse_pos.x) //distance from right border
-      _top = checkHotspot(crop_mouse_pos.y-rect.top)
-      _bottom = checkHotspot(rect.bottom-crop_mouse_pos.y)
+      _left = checkHotspot(crop_mouse_pos.x-rect.left+10) //distance from left border
+      _right = checkHotspot(rect.right-crop_mouse_pos.x+10) //distance from right border
+      _top = checkHotspot(crop_mouse_pos.y-rect.top+10)
+      _bottom = checkHotspot(rect.bottom-crop_mouse_pos.y+10)
 
       //SET inset coordinates to avoid artifacts with 'auto' and aspectRatio
       croprect.style.top=croprect.offsetTop+'px'
@@ -137,8 +144,8 @@ export default function Cropper(canvas, adj) {
 
     function resetCropRect(currentc){
       const crop = document.getElementById('crop')
-      crop.style.width= Math.round(canvas.getBoundingClientRect().width)+'px'
-      crop.style.height = Math.round(canvas.getBoundingClientRect().height)+'px'
+      crop.style.width= Math.round(canvas.offsetWidth)+'px'
+      crop.style.height = Math.round(canvas.offsetHeight)+'px'
 
       if(params.ar) croprect.style.aspectRatio=params.ar
       else croprect.style.aspectRatio=''
@@ -151,26 +158,28 @@ export default function Cropper(canvas, adj) {
         const c = currentc
         croprect.style.inset=`${c.offsetTop}px ${c.offsetRight}px ${c.offsetBottom}px ${c.offsetLeft}px`
       }
-      //this is a UI hack, need to change a button outside of this component ... sorry
-      toggleResetComposition()
-    }
-    
-    ////this is a UI hack, need to change a button outside of this component ... sorry
-    function toggleResetComposition(){      
-      if(Object.values(trs).reduce((p,v)=>p+=v,0)===0 && Object.values(params).reduce((p,v)=>p+=v,0)===0 && adj.perspective.modified==0) btn_reset_comp.setAttribute('disabled',true)
-      else btn_reset_comp.removeAttribute('disabled')
+      if(onUpdate) onUpdate(currentc||0)
     }
 
+    let lastclick=0
+    function clickCropRect(e){
+      e.preventDefault()
+      //mobile can't intercept double-tap as a double click ... handle it here with a timer! yuk
+      if(lastclick && (Date.now()-lastclick)<200) return resetCropRect()
+      lastclick=Date.now()
+    }
+
+
   return html`
-      <div id="crop" @dblclick="${()=>resetCropRect()}">
-       <div id="croprect">
+      <div id="crop" @dblclick="${()=>resetCropRect()}" @click="${clickCropRect}" style="width:${canvas?.offsetWidth}px;height:${canvas?.offsetHeight}px">
+       <div id="croprect" style="inset:0;">
           <div class="cropcorner" id="top_left" ></div>
           <div class="cropcorner" id="top_right" ></div>
           <div class="cropcorner" id="bottom_left" ></div>
           <div class="cropcorner" id="bottom_right" ></div>
-          <div class="cropcorner" id="left" ></div>
-          <div class="cropcorner" id="right" ></div>
-          ${!params.ar && `
+          ${()=>showtopbottom.value && html`
+            <div class="cropcorner" id="left" ></div>
+            <div class="cropcorner" id="right" ></div>
             <div class="cropcorner" id="top" ></div>
             <div class="cropcorner" id="bottom" ></div>
           `}

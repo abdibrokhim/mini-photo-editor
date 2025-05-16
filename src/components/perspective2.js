@@ -1,11 +1,14 @@
 import { html, onMount, onUnmount} from '@xdadda/mini'
 import canvasMouse from './canvasmouse.js'
 
-export default function Quad(canvas, params, onUpdate){
+export default function Perspective(canvas, params, onUpdate){
 
     let zeropoints = [[0.25,0.25], [0.75,0.25], [0.75,0.75],[0.25,0.75]]
-    let initpoints = params?.quad || zeropoints
+    let initpoints = params?.after || params?.before || zeropoints
+    let status = 0 //0 =drawing before, 1= drawing after
+    if(params?.before) status=1 
 
+    console.log('perspective',status,initpoints)
     let firstdraw=true
     function drawQuad(points, ctx){
       ctx.clearRect(0, 0, mousecanvas.width, mousecanvas.height);
@@ -21,8 +24,12 @@ export default function Quad(canvas, params, onUpdate){
       ctx.stroke();
       if(firstdraw) firstdraw=false
       else if(!params.modified) params.modified=true
-      params.quad=points
-      if(onUpdate) onUpdate()
+
+      if(!status) params.before=points
+      else {
+        params.after=points
+        if(onUpdate) onUpdate()
+      }
     }
 
     function resetQuad(points){
